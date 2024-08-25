@@ -1,0 +1,25 @@
+{
+  "name": "scram_sha_256",
+  "version": "0.0.0",
+  "main": "./lib/",
+  "scripts": {},
+  "author": "CW",
+  "license": "Beerware",
+  "description": "A framework for using scram-sha-256 in javascript",
+  "dependencies": {},
+   "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anunique/js-scram-sha-256.git"
+  },
+  "keywords": [
+    "SCRAM",
+    "SHA",
+    "SHA-256",
+    "SCRAM-SHA-256",
+  ],
+  "bugs": {
+    "url": "https://github.com/anunique/js-scram-sha-256/issues"
+  },
+  "homepage": "https://github.com/anunique/js-scram-sha-256#readme"
+  
+}
