@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>REST Example for JS-SCRAM-SHA256</title>
+<meta name="description" content="REST Example for JS-SCRAM-SHA256"/>
+<meta charset="UTF-8"> 
+<style>
+html, body {
+	padding: 0;
+	margin: 0;
+	background-color:#000;
+	color:#0c0;
+	width: 100%;
+	height: 100%;
+}
+
+body {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	padding: 5px;
+}
+
+div {
+	width: 100%;
+	flex: 0 1 auto;
+	overflow: hidden;
+
+}
+
+input {
+	box-sizing: border-box;
+	padding: 0;
+	margin: 0;
+	background-color:#333;
+	color:#0c0;
+	border: 1px solid;
+	width: 100%;
+}
+
+pre {
+	padding-top: 2px;
+	width: 100%;
+	flex: 1 1 auto;
+	overflow: auto;
+	white-space: pre-wrap;
+}}
+</style>
+</head>
+<body>
+<div>
+<input type="text" name="input" id="input" size="100" value="" placeholder="username"/>
+<input type="text" name="input" id="input2" size="100" value="" placeholder="password"/>
+<button type="button" onclick="register()">Register</button> 
+<button type="button" onclick="login()">Login</button> 
+</div>
+<pre id="log"></pre>
+
+</body>
+<script>
+var log = document.getElementById("log");
+var input = document.getElementById("input");
+var input2 = document.getElementById("input2");
+
+var ClientKey, ServerKey, ClientKeyHash, nonce, localnonce;
+
+function dolog(text, ok) {
+	if (!ok)
+		log.innerHTML += "<span style='color:red;'>" + text + "</span>\n";
+	else 
+		log.innerHTML += text + "\n";
+	log.scrollTop = log.scrollHeight;
+}
+
+async function verify(msg, ok) {
+	if (!ok)
+	{
+		dolog(msg, false);
+		return;
+	}
+	msg = JSON.parse(msg);
+	let serversignature = Uint8Array.from(atob(msg.signature), c => c.charCodeAt(0));
+	let signature = new Uint8Array(await HMAC_SHA256(ServerKey, nonce));
+	
+	if (signature.length != serversignature.length)
+	{
+		dolog("INVALID SERVER SIGNATURE", false);
+		return;
+	}
+	
+	for (let i=0;i<signature.length;i++)
+	{
+		if (signature[i] != serversignature[i])
+		{
+			dolog("INVALID SERVER SIGNATURE", false);
+			return;
+		}
+	}
+	dolog("Login Successfull", true);
+}
+
+
+async function auth(msg, ok)
+{
+	if (!ok)
+	{
+		dolog(msg, false);
+		return;
+	}
+	msg = JSON.parse(msg);
+	let user = input.value;
+	let pw = input2.value;
+	let salt = Uint8Array.from(atob(msg.salt), c => c.charCodeAt(0));
+	let iterations = msg.iterations;
+	nonce = Uint8Array.from(atob(msg.nonce), c => c.charCodeAt(0));
+	for (let i=0;i<16;i++)
+	{
+		if (localnonce[i] != nonce[i])
+		{
+			dolog("Server send Invalid Nonce", false);
+			return;
+		}
+	}
+	let SaltedPassword = await PKDF2(salt, pw, iterations);
+	ClientKey = await HMAC_SHA256(SaltedPassword, "Client Key");
+	ServerKey = await HMAC_SHA256(SaltedPassword, "Server Key");
+	ClientKeyHash = await SHA256(ClientKey);
+	let ClientKeyHashChallangeHMAC = new Uint8Array(await HMAC_SHA256(ClientKeyHash, nonce));
+	let ClientProof = new Uint8Array(ClientKey);
+	for (let i=0;i<ClientKey.byteLength;i++)
+	{
+		ClientProof[i] ^= ClientKeyHashChallangeHMAC[i];
+	}
+	const options = {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			user: user,
+			proof: btoa(String.fromCharCode.apply(null, new Uint8Array(ClientProof))),
+		})
+	};
+	fetch('auth', options)
+		.then(response => response.json().then(data => {data.status = response.status; data.ok = response.ok; return data;}))
+		.then(data => verify(data.message, data.ok))
+		.catch(error => dolog(error, false));
+}
+
+
+async function login()
+{
+	let user = input.value;
+	localnonce = new Uint8Array(16);
+	self.crypto.getRandomValues(localnonce);
+	const options = {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			user: user,
+			nonce: btoa(String.fromCharCode.apply(null, new Uint8Array(localnonce))),
+		})
+	};
+	fetch('login', options)
+		.then(response => response.json().then(data => {data.status = response.status; data.ok = response.ok; return data;}))
+		.then(data => auth(data.message, data.ok))
+		.catch(error => dolog(error, false));
+}
+
+async function register()
+{
+	let user = input.value;
+	let pw = input2.value;
+	let iterations = 10000;
+	let salt = new Uint8Array(32);
+	self.crypto.getRandomValues(salt);
+	let SaltedPassword = await PKDF2(salt, pw, iterations);
+	ClientKey = await HMAC_SHA256(SaltedPassword, "Client Key");
+	ServerKey = await HMAC_SHA256(SaltedPassword, "Server Key");
+	ClientKeyHash = await SHA256(ClientKey);
+	const options = {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			user: user,
+			ClientKeyHash: btoa(String.fromCharCode.apply(null, new Uint8Array(ClientKeyHash))),
+			ServerKey: btoa(String.fromCharCode.apply(null, new Uint8Array(ServerKey))),
+			iterations: iterations,
+			salt: btoa(String.fromCharCode.apply(null, salt))
+		})
+	};
+	fetch('register', options)
+		.then(response => response.json().then(data => {data.status = response.status; data.ok = response.ok; return data;}))
+		.then(data => dolog(data.message, data.ok))
+		.catch(error => dolog(error, false));
+}
+
+async function PKDF2(salt, password, iterations) {
+	let encoder = new TextEncoder();
+	let data = encoder.encode(password);
+	let importedKey = await crypto.subtle.importKey("raw", data, "PBKDF2", false, ["deriveBits"]);
+	let params = {name: "PBKDF2", hash: "SHA-256", salt: salt, iterations: iterations};
+	let derivation = await crypto.subtle.deriveBits(params, importedKey, 256);
+	return derivation;
+}
+
+async function SHA256(message, salt) {
+	let mergedArray;
+	if (salt) {
+		let data;
+		if (message.constructor.name == "String")
+		{
+			let encoder = new TextEncoder();
+			data = encoder.encode(message);
+		}
+		else
+			data = message;
+		mergedArray = new Uint8Array(salt.length + data.length);
+		mergedArray.set(salt);
+		mergedArray.set(data, salt.length);
+	}
+	else {
+		mergedArray = message;
+	}
+	let hash = await window.crypto.subtle.digest("SHA-256", mergedArray);
+	return hash;
+}
+
+async function HMAC_SHA256(secret, message)
+{
+	let key = await crypto.subtle.importKey('raw',secret,{ name: 'HMAC', hash: 'SHA-256' },false,['sign', 'verify']);
+	let data;
+	if (message.constructor.name == "String")
+	{
+		let encoder = new TextEncoder();
+		data = encoder.encode(message);
+	}
+	else
+		data = message;
+	const signature = await crypto.subtle.sign('HMAC',key,data,);
+	return signature;
+}
+</script>
+</html>
