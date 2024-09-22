@@ -1,6 +1,6 @@
 {
   "name": "scram_sha_256",
-  "version": "0.0.0",
+  "version": "0.0.2",
   "main": "./lib/",
   "scripts": {},
   "author": "CW",
@@ -15,11 +15,10 @@
     "SCRAM",
     "SHA",
     "SHA-256",
-    "SCRAM-SHA-256",
+    "SCRAM-SHA-256"
   ],
   "bugs": {
     "url": "https://github.com/anunique/js-scram-sha-256/issues"
   },
   "homepage": "https://github.com/anunique/js-scram-sha-256#readme"
-  
 }
